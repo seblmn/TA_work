@@ -1,3 +1,13 @@
 .DS_Store
 __pycache__/
 *.py[cod]
+
+# Files above GitHub's 100 MB limit
+CollaborativeSimulation/ODs/escooter/OD_escooter_10001_11001.csv
+CollaborativeSimulation/ODs/escooter/OD_escooter_1001_2001.csv
+CollaborativeSimulation/ODs/escooter/OD_escooter_11001_12001.csv
+CollaborativeSimulation/ODs/escooter/OD_escooter_2001_3001.csv
+CollaborativeSimulation/ODs/escooter/OD_escooter_3001_4001.csv
+CollaborativeSimulation/ODs/escooter/OD_escooter_4001_5001.csv
+CollaborativeSimulation/ODs/escooter/OD_escooter_5001_6001.csv
+CollaborativeSimulation/ODs/escooter/OD_escooter_6001_7001.csv

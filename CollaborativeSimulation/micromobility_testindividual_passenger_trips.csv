@@ -1,0 +1,1 @@
+passanger_id;passanger_arrival_time;passanger_waiting_time;final_trip;passanger_trip_id;start_time;end_time;travel_time;distance;departure_key;segments_on_board;avg_on_board;avg_occupancy_rate;travel_time_from_departure;start_location;end_location;vehicle_trip_id,line_id,direction_id,vehicle_id;manager_id

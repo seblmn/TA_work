@@ -1,0 +1,1 @@
+departure_id;manager_id;vehicle_id;departure_time;end_time;start_location;start_location_index;total_time;n_segments;served_passengers;total_empty_trips;total_occupied_trips;avg_occupancy;std_occupancy;max_occupancy;avg_occupancy_rate;std_occupancy_rate;max_occupancy_rate;;individual_segment_trips_from_here(-1 is for not applicable)

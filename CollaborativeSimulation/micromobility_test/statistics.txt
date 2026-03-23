@@ -1,0 +1,67 @@
+# OVERALL stat;
+end time;3448
+# PASSENGERS stat;
+number of all passengers;24
+number of served passengers;24
+number of unserved passengers;0
+number in simulation;24
+number of passenger or their destinations;0
+total waiting time;0
+total time on board;6166
+total time on board from vehicle events (for double check);6166
+total distance on board from vehicle events;34309
+total_time;6190
+AVG total waiting time;0.0
+AVG total time on board;256.9166666666667
+AVG time on board from vehicle events (for double check);256.9166666666667
+AVG distance on board from vehicle events;1429.5416666666667
+AVG total_time;257.9166666666667
+MAX total waiting time;0
+MAX total time on board;844
+MAX total_time;845
+MAX time from vehicle events;844
+MAX distance from vehicle events;4693
+# VEHICLES stat;
+number of passengers still on vehicles;0
+number of empty vehicles at end;200
+number of served passengers;0
+occuped total distance;0
+empty total distance;0
+occuped total travel time;0
+empty total travel time;0
+number of occupied trips;0
+number of empty trips;0
+### FLEET manager AVG stat;
+number of passengers still registered in queue FIRST FIFO check;0
+number of passengers still registered in queue SECOND dict check;0
+number of passengers served by managers;0
+number of passengers served by vehicles under manager;0
+number of available empty vehicles;0
+occuped total distance;0
+empty total distance;0
+occuped total travel time;0
+empty total travel time;0
+# FLEET manager stat -1;no specified fleet manager type
+number of passengers still registered in queue FIRST FIFO check;0
+number of passengers still registered in queue SECOND dict check;0
+number of passengers served by managers;0
+number of passengers served by vehicles under manager;0
+number of registered vehicles;200
+number of available empty vehicles;0
+occuped total distance;0
+empty total distance;0
+occuped total travel time;0
+empty total travel time;0
+time of the first boarded passenger;None
+time of the last served passenger;3448
+number_of_empty_trips;0
+number_of_occupied_trips;0
+number_of_empty_trips_only_until_last_served;0
+number_of_occupied_trips_only_until_last_served;0
+# Locations stat;
+number of passengers still registered on stations FIRST FIFO check;0
+number of passengers still registered on stations SECOND dict check;0
+number of passengers still registered on stations THIRD count check;0
+number of vehicles registered on stations FIRST FIFO check;200
+number of vehicles registered on stations SECOND dict check;200
+number of vehicles registered on stations THIRD count check;200

@@ -1,0 +1,9 @@
+
+
+C:\Python37\python.exe "D:\KTH\Python_scripts\imobilitylab\simulator\use_cases\micromobility_sebastien\mimicing_micromobility.py" D:\KTH\CollaborativeSimulation\locations\pt_stops_link_connections_to_road_network.csv D:\KTH\CollaborativeSimulation\ODs\escooter_test D:\KTH\CollaborativeSimulation\micromobility_test
+
+PYTHONPATH=/Users/sebastienlemasne/Documents/Programmation/KTH/TA \
+python3 imobilitylab/simulator/use_cases/micromobility_sebastien/mimicing_micromobility.py \
+CollaborativeSimulation/locations/pt_stops_link_connections_to_road_network.csv \
+CollaborativeSimulation/ODs/escooter_test \
+CollaborativeSimulation/micromobility_test
