@@ -1,26 +1,26 @@
 # OVERALL stat;
-end time;3448
+end time;3577
 # PASSENGERS stat;
-number of all passengers;24
-number of served passengers;24
+number of all passengers;38
+number of served passengers;38
 number of unserved passengers;0
-number in simulation;24
+number in simulation;38
 number of passenger or their destinations;0
 total waiting time;0
-total time on board;6166
-total time on board from vehicle events (for double check);6166
-total distance on board from vehicle events;34309
-total_time;6190
+total time on board;12647
+total time on board from vehicle events (for double check);12647
+total distance on board from vehicle events;70341
+total_time;12685
 AVG total waiting time;0.0
-AVG total time on board;256.9166666666667
-AVG time on board from vehicle events (for double check);256.9166666666667
-AVG distance on board from vehicle events;1429.5416666666667
-AVG total_time;257.9166666666667
+AVG total time on board;332.8157894736842
+AVG time on board from vehicle events (for double check);332.8157894736842
+AVG distance on board from vehicle events;1851.078947368421
+AVG total_time;333.8157894736842
 MAX total waiting time;0
-MAX total time on board;844
-MAX total_time;845
-MAX time from vehicle events;844
-MAX distance from vehicle events;4693
+MAX total time on board;908
+MAX total_time;909
+MAX time from vehicle events;908
+MAX distance from vehicle events;5049
 # VEHICLES stat;
 number of passengers still on vehicles;0
 number of empty vehicles at end;200
@@ -53,7 +53,7 @@ empty total distance;0
 occuped total travel time;0
 empty total travel time;0
 time of the first boarded passenger;None
-time of the last served passenger;3448
+time of the last served passenger;3577
 number_of_empty_trips;0
 number_of_occupied_trips;0
 number_of_empty_trips_only_until_last_served;0

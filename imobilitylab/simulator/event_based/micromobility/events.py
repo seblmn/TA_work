@@ -33,6 +33,11 @@ class PickupEvent(VehicleEvent):
         if len(self.passenger.borded_times) == 0 or self.passenger.borded_times[-1] != self.execution_time:
             self.passenger.borded_times.append(self.execution_time)
 
+        if self.vehicle.first_served_passenger_boarding_time is None:
+            self.vehicle.first_served_passenger_boarding_time = self.execution_time
+        if self.vehicle.total_boarded < self.vehicle.capacity:
+            self.vehicle.total_boarded += 1
+
         self.passenger.vehicle = self.vehicle
         self.passenger.in_simulation = True
         self.passenger.served = True
@@ -58,9 +63,8 @@ class DropoffEvent(VehicleEvent):
         if len(self.passenger.alighting_times) == 0 or self.passenger.alighting_times[-1] != self.execution_time:
             self.passenger.alighting_times.append(self.execution_time)
 
-        if hasattr(self.vehicle, 'passengers') and self.passenger.id in self.vehicle.passengers:
-            self.vehicle.unload_passenger(self.passenger)
-
+        dis = None
+        tt = None
         if hasattr(self.vehicle, 'manager') and origin_location is not None:
             dis, tt = self.vehicle.manager.get_distance_and_travel_time_between_passenger_origin_destination(
                 origin_location,
@@ -70,6 +74,33 @@ class DropoffEvent(VehicleEvent):
                 self.passenger.total_distance_on_board_from_vehicleEvent += dis
             if tt is not None:
                 self.passenger.total_travel_time_on_board_from_vehicleEvent += tt
+
+        if self.vehicle.total_boarded > 0:
+            self.vehicle.total_boarded -= 1
+        self.vehicle.total_served_passengers += 1
+        self.vehicle.number_of_occupied_trips += 1
+        if dis is not None:
+            self.vehicle.total_distance_occupied += dis
+
+        if tt is None:
+            if len(self.passenger.borded_times) > 0:
+                tt = self.execution_time - self.passenger.borded_times[-1]
+            else:
+                tt = 0
+        self.vehicle.total_travel_time_occupied += tt
+
+        if origin_location is not None:
+            self.vehicle.collect_trip(
+                origin_location,
+                self.location,
+                dis,
+                1,
+                self.execution_time - tt,
+                self.execution_time,
+            )
+
+        self.vehicle.number_of_empty_trips_only_until_last_served = self.vehicle.number_of_empty_trips
+        self.vehicle.number_of_occupied_trips_only_until_last_served = self.vehicle.number_of_occupied_trips
 
         self.passenger.vehicle = None
         self.vehicle.last_served_passenger_alighting_time = self.execution_time

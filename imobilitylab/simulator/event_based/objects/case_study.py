@@ -478,7 +478,7 @@ class CaseStudy(object):
         print('   number of passengers still registered in queue FIRST FIFO check', n_passengers_FIFO)
         print('   number of passengers still registered in queue SECOND dict check', n_passengers_dict)
         print('   number of passengers served by managers', passengers_served)
-        print('   number of passengers served by vehicles under managers', passengers_served)
+        print('   number of passengers served by vehicles under managers', passengers_served_vehicles)
         print('   number of available empty vehicles', available_empty_vehicles)
         if output_dir is not None:
             file_o.write('### FLEET manager AVG stat;'+'\n')
