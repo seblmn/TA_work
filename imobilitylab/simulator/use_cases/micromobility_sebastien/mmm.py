@@ -300,6 +300,43 @@ def export_trip_lifecycle(output_dir: str, traces: list, case_study):
     print(f'Trip lifecycle exported: {filepath}')
 
 
+def export_individual_outputs_for_micromobility(output_dir: str, case_study):
+    """Refresh individual_* outputs for this micromobility use case."""
+    os.makedirs(output_dir, exist_ok=True)
+
+    passenger_path = os.path.join(output_dir, 'individual_passenger_trips.csv')
+    with open(passenger_path, 'w') as f:
+        f.write(
+            'passanger_id;passanger_arrival_time;passanger_waiting_time;final_trip;'
+            'passanger_trip_id;start_time;end_time;travel_time;distance;departure_key;'
+            'segments_on_board;avg_on_board;avg_occupancy_rate;travel_time_from_departure;'
+            'start_location;end_location;vehicle_trip_id,line_id,direction_id,vehicle_id;manager_id\n'
+        )
+
+    vehicle_path = os.path.join(output_dir, 'individual_vehicle_trips.csv')
+    with open(vehicle_path, 'w') as f:
+        f.write(
+            'vehicle_id;manager_id;departure_id;departure_time;segment_order_index;'
+            'in_simulation_start_time;in_simulation_end_time;in_simulation_travel_time;'
+            'in_simulation_distance;in_simulation_on_board;sharing_rate;start_location;'
+            'end_location;planned_start_time;planned_end_time;planned_travel_time;planned_distance\n'
+        )
+        for vehicle in case_study.vehicles:
+            for trip in vehicle.trip_collection:
+                f.write(trip.to_csv_str() + '\n')
+
+    departures_path = os.path.join(output_dir, 'individual_departures.csv')
+    with open(departures_path, 'w') as f:
+        f.write(
+            'departure_id;manager_id;vehicle_id;departure_time;end_time;start_location;start_location_index;'
+            'total_time;n_segments;served_passengers;total_empty_trips;total_occupied_trips;'
+            'avg_occupancy;std_occupancy;max_occupancy;avg_occupancy_rate;std_occupancy_rate;'
+            'max_occupancy_rate;;individual_segment_trips_from_here(-1 is for not applicable)\n'
+        )
+
+    print(f'Individual outputs refreshed: {passenger_path}, {vehicle_path}, {departures_path}')
+
+
 if __name__ == '__main__':
     if len(sys.argv) < 4:
         print('Usage: mmm.py <location_file> <distance_matrix_folder> <output_dir>')
@@ -351,6 +388,7 @@ if __name__ == '__main__':
     print('Simulation starts')
     case_study.inicialize_passengers_for_simulation = lambda: None
     case_study.start_simulation()
+    export_individual_outputs_for_micromobility(output_dir, case_study)
     case_study.make_statistic(output_dir, None, False)
     export_trip_lifecycle(output_dir, trip_traces, case_study)
     print('End of Simulation')

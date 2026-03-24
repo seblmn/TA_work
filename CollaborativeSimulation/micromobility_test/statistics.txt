@@ -24,40 +24,40 @@ MAX distance from vehicle events;5049
 # VEHICLES stat;
 number of passengers still on vehicles;0
 number of empty vehicles at end;200
-number of served passengers;0
-occuped total distance;0
+number of served passengers;38
+occuped total distance;70341
 empty total distance;0
-occuped total travel time;0
+occuped total travel time;12647
 empty total travel time;0
-number of occupied trips;0
+number of occupied trips;38
 number of empty trips;0
 ### FLEET manager AVG stat;
 number of passengers still registered in queue FIRST FIFO check;0
 number of passengers still registered in queue SECOND dict check;0
 number of passengers served by managers;0
-number of passengers served by vehicles under manager;0
+number of passengers served by vehicles under manager;38
 number of available empty vehicles;0
-occuped total distance;0
+occuped total distance;70341
 empty total distance;0
-occuped total travel time;0
+occuped total travel time;12647
 empty total travel time;0
 # FLEET manager stat -1;no specified fleet manager type
 number of passengers still registered in queue FIRST FIFO check;0
 number of passengers still registered in queue SECOND dict check;0
 number of passengers served by managers;0
-number of passengers served by vehicles under manager;0
+number of passengers served by vehicles under manager;38
 number of registered vehicles;200
 number of available empty vehicles;0
-occuped total distance;0
+occuped total distance;70341
 empty total distance;0
-occuped total travel time;0
+occuped total travel time;12647
 empty total travel time;0
-time of the first boarded passenger;None
+time of the first boarded passenger;438
 time of the last served passenger;3577
 number_of_empty_trips;0
-number_of_occupied_trips;0
+number_of_occupied_trips;38
 number_of_empty_trips_only_until_last_served;0
-number_of_occupied_trips_only_until_last_served;0
+number_of_occupied_trips_only_until_last_served;38
 # Locations stat;
 number of passengers still registered on stations FIRST FIFO check;0
 number of passengers still registered on stations SECOND dict check;0
