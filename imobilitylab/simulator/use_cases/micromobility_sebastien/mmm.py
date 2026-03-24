@@ -44,31 +44,53 @@ def load_events_to_df():
     return df
 
 
-def nearest_location(location_file, lon: float, lat: float):
-    """Find nearest location by Euclidean distance."""
-    nearest_id = None
-    nearest_distance = float('inf')
-    
+def get_od_matrix_location_ids(manager) -> set:
+    """Collect all location IDs that are usable in the loaded OD matrix."""
+    valid_location_ids = set()
+    for from_id, destinations in manager.distance_tt_matrix.items():
+        valid_location_ids.add(from_id)
+        for to_id in destinations.keys():
+            valid_location_ids.add(to_id)
+    return valid_location_ids
+
+
+def load_location_points(location_file: str, allowed_location_ids: set):
+    """Load location points filtered to IDs present in the OD matrix."""
+    location_points = []
+
     with open(location_file) as f:
         f.readline()  # skip header
         for line in f:
             parts = line.strip('\n\r').split(';')
+            location_id = int(parts[0])
+            if location_id not in allowed_location_ids:
+                continue
             location_lon = float(parts[4])
             location_lat = float(parts[5])
-            distance = ((location_lon - lon) ** 2 + (location_lat - lat) ** 2) ** 0.5
-            
-            if distance < nearest_distance:
-                nearest_distance = distance
-                nearest_id = int(parts[0])
-    
+            location_points.append((location_id, location_lon, location_lat))
+
+    return location_points
+
+
+def nearest_location(location_points, lon: float, lat: float):
+    """Find nearest OD-matrix location by Euclidean distance."""
+    nearest_id = None
+    nearest_distance = float('inf')
+
+    for location_id, location_lon, location_lat in location_points:
+        distance = ((location_lon - lon) ** 2 + (location_lat - lat) ** 2) ** 0.5
+        if distance < nearest_distance:
+            nearest_distance = distance
+            nearest_id = location_id
+
     return nearest_id
 
 
-def add_location_id_column(df: pd.DataFrame, location_file: str):
-    """Add a location_id column to SQL events based on nearest simulation location."""
+def add_location_id_column(df: pd.DataFrame, location_points):
+    """Add location_id based on nearest location restricted to the OD matrix."""
     location_ids = []
     for _, row in df.iterrows():
-        location_ids.append(nearest_location(location_file, float(row['lon']), float(row['lat'])))
+        location_ids.append(nearest_location(location_points, float(row['lon']), float(row['lat'])))
     df = df.copy()
     df['location_id'] = location_ids
     return df
@@ -297,9 +319,16 @@ if __name__ == '__main__':
     print('=== LOADING DATA ===')
     load_locations(case_study, location_file)
     load_distance_matrix(manager, distance_matrix_folder)
+    od_location_ids = get_od_matrix_location_ids(manager)
+    od_location_points = load_location_points(location_file, od_location_ids)
+    print(f'OD matrix locations available for matching: {len(od_location_points)}')
+    if len(od_location_points) == 0:
+        print('No OD-matrix locations available for SQL matching.')
+        sys.exit(1)
+
     # Load SQL events and map each row to nearest simulation location
     df = load_events_to_df()
-    df = add_location_id_column(df, location_file)
+    df = add_location_id_column(df, od_location_points)
     print(f'Events loaded: {len(df)}')
 
     if len(df) == 0:
