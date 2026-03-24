@@ -10,7 +10,7 @@ from imobilitylab.simulator.event_based.objects.location import Location_with_pa
 from imobilitylab.simulator.event_based.objects.passenger import Passenger
 from imobilitylab.simulator.event_based.micromobility.objects import MicromobilityFleetManager, CaseStudy_micromobility, ScooterVehicle
 from imobilitylab.simulator.event_based.core.simulator import Simulator, TimeLine_with_TimeBins
-from imobilitylab.simulator.event_based.micromobility.events import PassengerRequestEvent, PickupEvent, DropoffEvent, RebalanceDropoffEvent
+from imobilitylab.simulator.event_based.micromobility.events import PassengerRequestEvent, PickupEvent, DropoffEvent, RebalanceDropoffEvent, MaintenanceDropoffEvent
 
 
 
@@ -31,7 +31,7 @@ def load_events_to_df():
            ST_Y(ST_Centroid(the_geom)) AS lat
     FROM e_scooters.events_stockholm
     WHERE event_time >= '2022-09-10 07:00:00' AND event_time < '2022-09-10 08:00:00'
-            AND event_type_id IN (1,2,7)
+            AND event_type_id IN (1,2,7,10)
     ORDER BY provider_device_id ASC, event_time ASC, event_type_id ASC
     """
 
@@ -170,7 +170,7 @@ def schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_un
         if event_time_rel < 0:
             event_time_rel = 0
 
-        case_study.simulator.add_event(RebalanceDropoffEvent(event_time_rel, scooter, location_obj))
+        case_study.simulator.add_event(MaintenanceDropoffEvent(event_time_rel, scooter, location_obj))
         traces.append({
             'rebalance_id': rebalance_id,
             'scooter_id': scooter_id,
@@ -179,6 +179,39 @@ def schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_un
             'event_time_sql_unix': event_time_absolute,
         })
         rebalance_id += 1
+
+    return traces
+
+
+def schedule_maintenance_dropoff_events(case_study, manager, df, reference_time_unix: int):
+    """Schedule maintenance drop-off events (event_type_id=10)."""
+    maintenances = df[df['event_type_id'] == 10].sort_values('event_time')
+    traces = []
+    maintenance_id = 1
+
+    for _, row in maintenances.iterrows():
+        location_id = int(row['location_id'])
+        if location_id not in case_study.location_id_to_index:
+            continue
+
+        location_obj = case_study.locations[case_study.location_id_to_index[location_id]]
+        scooter_id = row['provider_device_id']
+        scooter = get_or_create_scooter(case_study, manager, scooter_id, location_obj)
+
+        event_time_absolute = int(row['event_time'].timestamp())
+        event_time_rel = (event_time_absolute - reference_time_unix) + 20
+        if event_time_rel < 0:
+            event_time_rel = 0
+
+        case_study.simulator.add_event(RebalanceDropoffEvent(event_time_rel, scooter, location_obj))
+        traces.append({
+            'maintenance_id': maintenance_id,
+            'scooter_id': scooter_id,
+            'location_id': location_id,
+            'event_time_rel': event_time_rel,
+            'event_time_sql_unix': event_time_absolute,
+        })
+        maintenance_id += 1
 
     return traces
 
@@ -258,7 +291,7 @@ def build_trips_from_sql(case_study, manager, df, reference_time_unix: int):
     return traces
 
 
-def export_trip_lifecycle(output_dir: str, traces: list, rebalance_traces: list, case_study):
+def export_trip_lifecycle(output_dir: str, traces: list, rebalance_traces: list, maintenance_traces: list, case_study):
     """Export documented lifecycle steps for all simulated SQL trips."""
     os.makedirs(output_dir, exist_ok=True)
     filepath = os.path.join(output_dir, 'trip_lifecycle_steps.csv')
@@ -333,6 +366,19 @@ def export_trip_lifecycle(output_dir: str, traces: list, rebalance_traces: list,
             'location_id': rebalance_trace['location_id'],
             'time_rel': rebalance_trace['event_time_rel'],
             'time_sql_unix': rebalance_trace['event_time_sql_unix'],
+            'planned_distance': '',
+            'planned_travel_time': ''
+        })
+
+    for maintenance_trace in maintenance_traces:
+        rows.append({
+            'event_family': 'maintenance',
+            'step': 'maintenance_dropoff',
+            'passenger_id': '',
+            'scooter_id': maintenance_trace['scooter_id'],
+            'location_id': maintenance_trace['location_id'],
+            'time_rel': maintenance_trace['event_time_rel'],
+            'time_sql_unix': maintenance_trace['event_time_sql_unix'],
             'planned_distance': '',
             'planned_travel_time': ''
         })
@@ -426,6 +472,9 @@ if __name__ == '__main__':
     rebalance_traces = schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_unix)
     print(f'Scheduled rebalance dropoff events: {len(rebalance_traces)}')
 
+    maintenance_traces = schedule_maintenance_dropoff_events(case_study, manager, df, reference_time_unix)
+    print(f'Scheduled maintenance dropoff events: {len(maintenance_traces)}')
+
     # Build trips from all valid SQL pickup->dropoff pairs
     trip_traces = build_trips_from_sql(case_study, manager, df, reference_time_unix)
     if len(trip_traces) == 0:
@@ -439,6 +488,6 @@ if __name__ == '__main__':
     case_study.start_simulation()
     export_individual_outputs_for_micromobility(output_dir, case_study)
     case_study.make_statistic(output_dir, None, False)
-    export_trip_lifecycle(output_dir, trip_traces, rebalance_traces, case_study)
+    export_trip_lifecycle(output_dir, trip_traces, rebalance_traces, maintenance_traces, case_study)
     print('End of Simulation')
     sys.exit(0)
