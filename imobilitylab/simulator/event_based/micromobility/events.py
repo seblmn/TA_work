@@ -64,16 +64,19 @@ class DropoffEvent(VehicleEvent):
             self.passenger.alighting_times.append(self.execution_time)
 
         dis = None
-        tt = None
         if hasattr(self.vehicle, 'manager') and origin_location is not None:
-            dis, tt = self.vehicle.manager.get_distance_and_travel_time_between_passenger_origin_destination(
+            dis, _ = self.vehicle.manager.get_distance_and_travel_time_between_passenger_origin_destination(
                 origin_location,
                 self.location
             )
             if dis is not None:
                 self.passenger.total_distance_on_board_from_vehicleEvent += dis
-            if tt is not None:
-                self.passenger.total_travel_time_on_board_from_vehicleEvent += tt
+
+        if len(self.passenger.borded_times) > 0:
+            tt = self.execution_time - self.passenger.borded_times[-1]
+        else:
+            tt = 0
+        self.passenger.total_travel_time_on_board_from_vehicleEvent += tt
 
         if self.vehicle.total_boarded > 0:
             self.vehicle.total_boarded -= 1
@@ -82,11 +85,6 @@ class DropoffEvent(VehicleEvent):
         if dis is not None:
             self.vehicle.total_distance_occupied += dis
 
-        if tt is None:
-            if len(self.passenger.borded_times) > 0:
-                tt = self.execution_time - self.passenger.borded_times[-1]
-            else:
-                tt = 0
         self.vehicle.total_travel_time_occupied += tt
 
         if origin_location is not None:

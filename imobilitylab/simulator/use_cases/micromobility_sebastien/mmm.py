@@ -30,7 +30,7 @@ def load_events_to_df():
            ST_X(ST_Centroid(the_geom)) AS lon,
            ST_Y(ST_Centroid(the_geom)) AS lat
     FROM e_scooters.events_stockholm
-    WHERE event_time >= '2022-09-10 07:00:00' AND event_time < '2022-09-10 10:00:00'
+    WHERE event_time >= '2022-09-10 07:00:00' AND event_time < '2022-09-10 08:00:00'
             AND event_type_id IN (1,2,7)
     ORDER BY provider_device_id ASC, event_time ASC, event_type_id ASC
     """
@@ -227,12 +227,10 @@ def build_trips_from_sql(case_study, manager, df, reference_time_unix: int):
                 dropoff_location
             )
 
-            if planned_tt is not None and planned_tt > 0:
-                dropoff_time_rel = pickup_time_rel + planned_tt
-            else:
-                dropoff_time_rel = (dropoff_time_absolute - reference_time_unix) + 20
-                if dropoff_time_rel <= pickup_time_rel:
-                    dropoff_time_rel = pickup_time_rel + 1
+            sql_travel_time = dropoff_time_absolute - pickup_time_absolute
+            if sql_travel_time <= 0:
+                sql_travel_time = 1
+            dropoff_time_rel = pickup_time_rel + sql_travel_time
 
             passenger = Passenger(passenger_id_counter, request_time_rel, pickup_location)
             case_study.add_passenger(passenger)
@@ -253,7 +251,7 @@ def build_trips_from_sql(case_study, manager, df, reference_time_unix: int):
                 'pickup_time_sql_unix': pickup_time_absolute,
                 'dropoff_time_sql_unix': dropoff_time_absolute,
                 'planned_distance': planned_distance,
-                'planned_travel_time': planned_tt
+                'planned_travel_time': sql_travel_time
             })
             i += 2
 
