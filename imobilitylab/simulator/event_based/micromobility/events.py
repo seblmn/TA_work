@@ -105,3 +105,42 @@ class DropoffEvent(VehicleEvent):
         self.passenger.vehicle = None
         self.vehicle.last_served_passenger_alighting_time = self.execution_time
         self.passenger.in_simulation = True
+
+
+class RebalanceDropoffEvent(VehicleEvent):
+    """Scooter rebalancing drop-off (instantaneous, no passenger)."""
+
+    def __init__(self, time: int, vehicle, location):
+        super(RebalanceDropoffEvent, self).__init__(time, vehicle)
+        self.location = location
+
+    def execute(self):
+        origin_location = self.vehicle.location
+
+        dis = None
+        tt = 0
+        if origin_location is not None and origin_location.id != self.location.id and hasattr(self.vehicle, 'manager') and self.vehicle.manager is not None:
+            dis, tt_from_matrix = self.vehicle.manager.get_distance_and_travel_time_between_passenger_origin_destination(
+                origin_location,
+                self.location,
+            )
+            if tt_from_matrix is not None:
+                tt = tt_from_matrix
+
+        if dis is not None:
+            self.vehicle.total_distance_empty += dis
+        self.vehicle.total_travel_time_empty += tt
+        self.vehicle.number_of_empty_trips += 1
+
+        if origin_location is not None:
+            self.vehicle.collect_trip(
+                origin_location,
+                self.location,
+                dis,
+                0,
+                self.execution_time - tt,
+                self.execution_time,
+            )
+
+        self.vehicle.location = self.location
+        self.vehicle.in_use = False

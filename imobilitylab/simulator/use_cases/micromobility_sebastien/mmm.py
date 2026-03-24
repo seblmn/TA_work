@@ -10,7 +10,7 @@ from imobilitylab.simulator.event_based.objects.location import Location_with_pa
 from imobilitylab.simulator.event_based.objects.passenger import Passenger
 from imobilitylab.simulator.event_based.micromobility.objects import MicromobilityFleetManager, CaseStudy_micromobility, ScooterVehicle
 from imobilitylab.simulator.event_based.core.simulator import Simulator, TimeLine_with_TimeBins
-from imobilitylab.simulator.event_based.micromobility.events import PassengerRequestEvent, PickupEvent, DropoffEvent
+from imobilitylab.simulator.event_based.micromobility.events import PassengerRequestEvent, PickupEvent, DropoffEvent, RebalanceDropoffEvent
 
 
 
@@ -30,8 +30,8 @@ def load_events_to_df():
            ST_X(ST_Centroid(the_geom)) AS lon,
            ST_Y(ST_Centroid(the_geom)) AS lat
     FROM e_scooters.events_stockholm
-    WHERE event_time >= '2022-09-10 07:00:00' AND event_time < '2022-09-10 08:00:00'
-      AND event_type_id IN (1,2)
+    WHERE event_time >= '2022-09-10 07:00:00' AND event_time < '2022-09-10 10:00:00'
+            AND event_type_id IN (1,2,7)
     ORDER BY provider_device_id ASC, event_time ASC, event_type_id ASC
     """
 
@@ -148,6 +148,31 @@ def add_or_move_scooter_from_sql_row(case_study, manager, row):
     scooter_id = row['provider_device_id']
     scooter = get_or_create_scooter(case_study, manager, scooter_id, location_obj)
     scooter.location = location_obj
+
+
+def schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_unix: int):
+    """Schedule rebalance drop-off events (event_type_id=7)."""
+    rebalances = df[df['event_type_id'] == 7].sort_values('event_time')
+    count = 0
+
+    for _, row in rebalances.iterrows():
+        location_id = int(row['location_id'])
+        if location_id not in case_study.location_id_to_index:
+            continue
+
+        location_obj = case_study.locations[case_study.location_id_to_index[location_id]]
+        scooter_id = row['provider_device_id']
+        scooter = get_or_create_scooter(case_study, manager, scooter_id, location_obj)
+
+        event_time_absolute = int(row['event_time'].timestamp())
+        event_time_rel = (event_time_absolute - reference_time_unix) + 20
+        if event_time_rel < 0:
+            event_time_rel = 0
+
+        case_study.simulator.add_event(RebalanceDropoffEvent(event_time_rel, scooter, location_obj))
+        count += 1
+
+    return count
 
 
 def build_trips_from_sql(case_study, manager, df, reference_time_unix: int):
@@ -373,9 +398,8 @@ if __name__ == '__main__':
         sys.exit(1)
     reference_time_unix = int(df['event_time'].min().timestamp())
 
-    # Create/move scooters from every SQL line as requested
-    for idx, row in df.iterrows():
-        add_or_move_scooter_from_sql_row(case_study, manager, row)
+    rebalance_count = schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_unix)
+    print(f'Scheduled rebalance dropoff events: {rebalance_count}')
 
     # Build trips from all valid SQL pickup->dropoff pairs
     trip_traces = build_trips_from_sql(case_study, manager, df, reference_time_unix)
