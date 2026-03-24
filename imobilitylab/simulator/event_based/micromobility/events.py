@@ -9,6 +9,8 @@ class PassengerRequestEvent(PassengerEvent):
 
     def execute(self):
         self.passenger.location = self.location
+        if len(self.passenger.arrival_times) == 0 or self.passenger.arrival_times[-1] != self.execution_time:
+            self.passenger.register_arrival_time(self.execution_time)
         self.passenger.in_simulation = True
         self.passenger.served = False
 
