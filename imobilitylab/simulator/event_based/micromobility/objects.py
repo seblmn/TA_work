@@ -49,6 +49,7 @@ class ScooterVehicle(VehiclePassive):
         self.speed_kmh = 20 #kmh
         self.battery = None
         self.battery_consumption_per_kmh = None
+        self.battery_state = 'unknown'  # possible values: 'unknown', 'charged', 'low'
 
 
 class TripMicromobility(TripBasic):

@@ -181,3 +181,33 @@ class MaintenanceDropoffEvent(VehicleEvent):
 
         self.vehicle.location = self.location
         self.vehicle.in_use = False
+
+
+class LowBatteryEvent(VehicleEvent):
+    """Scooter low battery event (event type 8)."""
+
+    def __init__(self, time: int, vehicle):
+        super(LowBatteryEvent, self).__init__(time, vehicle)
+
+    def execute(self):
+        self.vehicle.battery_state = 'low'
+
+
+class BatteryLowEvent(VehicleEvent):
+    """Scooter battery low event (event type 9 - alias for low_battery)."""
+
+    def __init__(self, time: int, vehicle):
+        super(BatteryLowEvent, self).__init__(time, vehicle)
+
+    def execute(self):
+        self.vehicle.battery_state = 'low'
+
+
+class BatteryChargedEvent(VehicleEvent):
+    """Scooter battery charged event (event type 11)."""
+
+    def __init__(self, time: int, vehicle):
+        super(BatteryChargedEvent, self).__init__(time, vehicle)
+
+    def execute(self):
+        self.vehicle.battery_state = 'charged'

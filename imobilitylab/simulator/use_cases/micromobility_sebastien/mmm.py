@@ -10,7 +10,7 @@ from imobilitylab.simulator.event_based.objects.location import Location_with_pa
 from imobilitylab.simulator.event_based.objects.passenger import Passenger
 from imobilitylab.simulator.event_based.micromobility.objects import MicromobilityFleetManager, CaseStudy_micromobility, ScooterVehicle
 from imobilitylab.simulator.event_based.core.simulator import Simulator, TimeLine_with_TimeBins
-from imobilitylab.simulator.event_based.micromobility.events import PassengerRequestEvent, PickupEvent, DropoffEvent, RebalanceDropoffEvent, MaintenanceDropoffEvent
+from imobilitylab.simulator.event_based.micromobility.events import PassengerRequestEvent, PickupEvent, DropoffEvent, RebalanceDropoffEvent, MaintenanceDropoffEvent, LowBatteryEvent, BatteryLowEvent, BatteryChargedEvent
 
 
 
@@ -31,7 +31,7 @@ def load_events_to_df():
            ST_Y(ST_Centroid(the_geom)) AS lat
     FROM e_scooters.events_stockholm
     WHERE event_time >= '2022-09-10 07:00:00' AND event_time < '2022-09-10 08:00:00'
-            AND event_type_id IN (1,2,7,10)
+            AND event_type_id IN (1,2,7,8,9,10,11)
     ORDER BY provider_device_id ASC, event_time ASC, event_type_id ASC
     """
 
@@ -216,6 +216,48 @@ def schedule_maintenance_dropoff_events(case_study, manager, df, reference_time_
     return traces
 
 
+def schedule_battery_events(case_study, manager, df, reference_time_unix: int):
+    """Schedule battery events (event_type_id=8,9,11)."""
+    battery_events_df = df[df['event_type_id'].isin([8, 9, 11])].sort_values('event_time')
+    traces = []
+    battery_event_id = 1
+
+    event_type_to_class = {
+        8: LowBatteryEvent,
+        9: BatteryLowEvent,
+        11: BatteryChargedEvent,
+    }
+
+    for _, row in battery_events_df.iterrows():
+        scooter_id = row['provider_device_id']
+        event_type_id = row['event_type_id']
+
+        # Get or create the scooter
+        # Battery events don't have helpful location info initially, use a dummy location
+        dummy_location = case_study.locations[0] if len(case_study.locations) > 0 else None
+        scooter = get_or_create_scooter(case_study, manager, scooter_id, dummy_location)
+
+        event_time_absolute = int(row['event_time'].timestamp())
+        event_time_rel = (event_time_absolute - reference_time_unix) + 20
+        if event_time_rel < 0:
+            event_time_rel = 0
+
+        # Create the appropriate battery event based on event_type_id
+        event_class = event_type_to_class[event_type_id]
+        case_study.simulator.add_event(event_class(event_time_rel, scooter))
+
+        traces.append({
+            'battery_event_id': battery_event_id,
+            'scooter_id': scooter_id,
+            'event_type': f'battery_event_type_{event_type_id}',
+            'event_time_rel': event_time_rel,
+            'event_time_sql_unix': event_time_absolute,
+        })
+        battery_event_id += 1
+
+    return traces
+
+
 def build_trips_from_sql(case_study, manager, df, reference_time_unix: int):
     """Create passenger request + pickup + dropoff events from all valid SQL pairs."""
     grouped = df.groupby('provider_device_id')
@@ -291,8 +333,8 @@ def build_trips_from_sql(case_study, manager, df, reference_time_unix: int):
     return traces
 
 
-def export_trip_lifecycle(output_dir: str, traces: list, rebalance_traces: list, maintenance_traces: list, case_study):
-    """Export documented lifecycle steps for all simulated SQL trips."""
+def export_trip_lifecycle(output_dir: str, traces: list, rebalance_traces: list, maintenance_traces: list, battery_traces: list, case_study):
+    """Export documented lifecycle steps for all simulated SQL trips, including battery events."""
     os.makedirs(output_dir, exist_ok=True)
     filepath = os.path.join(output_dir, 'trip_lifecycle_steps.csv')
     rows = []
@@ -379,6 +421,19 @@ def export_trip_lifecycle(output_dir: str, traces: list, rebalance_traces: list,
             'location_id': maintenance_trace['location_id'],
             'time_rel': maintenance_trace['event_time_rel'],
             'time_sql_unix': maintenance_trace['event_time_sql_unix'],
+            'planned_distance': '',
+            'planned_travel_time': ''
+        })
+
+    for battery_trace in battery_traces:
+        rows.append({
+            'event_family': 'battery_event',
+            'step': battery_trace['event_type'],
+            'passenger_id': '',
+            'scooter_id': battery_trace['scooter_id'],
+            'location_id': '',
+            'time_rel': battery_trace['event_time_rel'],
+            'time_sql_unix': battery_trace['event_time_sql_unix'],
             'planned_distance': '',
             'planned_travel_time': ''
         })
@@ -475,6 +530,9 @@ if __name__ == '__main__':
     maintenance_traces = schedule_maintenance_dropoff_events(case_study, manager, df, reference_time_unix)
     print(f'Scheduled maintenance dropoff events: {len(maintenance_traces)}')
 
+    battery_traces = schedule_battery_events(case_study, manager, df, reference_time_unix)
+    print(f'Scheduled battery events: {len(battery_traces)}')
+
     # Build trips from all valid SQL pickup->dropoff pairs
     trip_traces = build_trips_from_sql(case_study, manager, df, reference_time_unix)
     if len(trip_traces) == 0:
@@ -488,6 +546,6 @@ if __name__ == '__main__':
     case_study.start_simulation()
     export_individual_outputs_for_micromobility(output_dir, case_study)
     case_study.make_statistic(output_dir, None, False)
-    export_trip_lifecycle(output_dir, trip_traces, rebalance_traces, maintenance_traces, case_study)
+    export_trip_lifecycle(output_dir, trip_traces, rebalance_traces, maintenance_traces, battery_traces, case_study)
     print('End of Simulation')
     sys.exit(0)
