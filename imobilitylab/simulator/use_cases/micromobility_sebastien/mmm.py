@@ -13,6 +13,13 @@ from imobilitylab.simulator.event_based.core.simulator import Simulator, TimeLin
 from imobilitylab.simulator.event_based.micromobility.events import PassengerRequestEvent, PickupEvent, DropoffEvent, RebalanceDropoffEvent, MaintenanceDropoffEvent, LowBatteryEvent, BatteryLowEvent, BatteryChargedEvent
 
 
+FLEET_INIT_FULL = 'full'
+FLEET_INIT_ON_DEMAND = 'on_demand'
+VALID_FLEET_INIT_MODES = {FLEET_INIT_FULL, FLEET_INIT_ON_DEMAND}
+# Configuration: choose fleet initialization strategy here.
+FLEET_INIT_MODE = FLEET_INIT_ON_DEMAND
+
+
 
 def load_events_to_df():
     """Load scooter events from PostgreSQL."""
@@ -30,9 +37,41 @@ def load_events_to_df():
            ST_X(ST_Centroid(the_geom)) AS lon,
            ST_Y(ST_Centroid(the_geom)) AS lat
     FROM e_scooters.events_stockholm
-    WHERE event_time >= '2022-09-10 07:00:00' AND event_time < '2022-09-10 08:00:00'
+        WHERE event_time >= '2022-09-10 07:00:00' AND event_time < '2022-09-10 08:00:00'
             AND event_type_id IN (1,2,7,8,9,10,11)
+            AND provider_device_id NOT IN ('04690fbccc401d9b','5b77690c2a625863','8d12e7f965ad93cb','c206210963de559f','ba9c79d12ac2dd3d','5f0d6aefe7e9949b','4a30221600a6203f','3fe78190518b6787')
     ORDER BY provider_device_id ASC, event_time ASC, event_type_id ASC
+    """
+
+    conn = psycopg2.connect(**conn_info)
+    try:
+        df = pd.read_sql_query(sql, conn)
+    finally:
+        conn.close()
+
+    return df
+
+
+def load_initial_fleet_to_df():
+    """Load each existing scooter's latest known position from SQL history."""
+    db_password = os.getenv("DB_PASSWORD")
+    conn_info = {
+        'host': '130.237.60.131',
+        'port': 3221,
+        'dbname': 'itsdev',
+        'user': 'sebastien',
+        'password': db_password
+    }
+
+    sql = """
+    SELECT DISTINCT ON (provider_device_id)
+           provider_device_id,
+           event_time,
+           ST_X(ST_Centroid(the_geom)) AS lon,
+           ST_Y(ST_Centroid(the_geom)) AS lat
+    FROM e_scooters.events_stockholm
+        WHERE the_geom IS NOT NULL AND event_time < '2022-09-10 07:00:00' AND event_time >= '2022-09-03 00:00:00'
+    ORDER BY provider_device_id ASC, event_time DESC
     """
 
     conn = psycopg2.connect(**conn_info)
@@ -134,9 +173,24 @@ def load_distance_matrix(manager, distance_matrix_folder):
 
 def get_or_create_scooter(case_study, manager, scooter_id, default_location):
     if scooter_id not in case_study.vehicle_id_to_index:
+        if default_location is None:
+            return None
         vehicle = ScooterVehicle(scooter_id, default_location, 1, manager)
         case_study.add_vehicle(vehicle)
     return case_study.vehicles[case_study.vehicle_id_to_index[scooter_id]]
+
+
+def get_existing_scooter(case_study, scooter_id):
+    if scooter_id not in case_study.vehicle_id_to_index:
+        return None
+    return case_study.vehicles[case_study.vehicle_id_to_index[scooter_id]]
+
+
+def get_scooter_for_mode(case_study, manager, scooter_id, default_location, fleet_init_mode: str):
+    """Return scooter according to fleet initialization strategy."""
+    if fleet_init_mode == FLEET_INIT_FULL:
+        return get_existing_scooter(case_study, scooter_id)
+    return get_or_create_scooter(case_study, manager, scooter_id, default_location)
 
 
 def add_or_move_scooter_from_sql_row(case_study, manager, row):
@@ -150,7 +204,27 @@ def add_or_move_scooter_from_sql_row(case_study, manager, row):
     scooter.location = location_obj
 
 
-def schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_unix: int):
+def initialize_scooter_fleet(case_study, manager, initial_fleet_df):
+    """Create the initial scooter fleet from last known SQL positions."""
+    initialized = 0
+    for _, row in initial_fleet_df.iterrows():
+        location_id = int(row['location_id'])
+        if location_id not in case_study.location_id_to_index:
+            continue
+        location_obj = case_study.locations[case_study.location_id_to_index[location_id]]
+        scooter_id = row['provider_device_id']
+        scooter = get_existing_scooter(case_study, scooter_id)
+        if scooter is None:
+            scooter = ScooterVehicle(scooter_id, location_obj, 1, manager)
+            case_study.add_vehicle(scooter)
+            initialized += 1
+        else:
+            scooter.location = location_obj
+
+    return initialized
+
+
+def schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_unix: int, fleet_init_mode: str):
     """Schedule rebalance drop-off events (event_type_id=7)."""
     rebalances = df[df['event_type_id'] == 7].sort_values('event_time')
     traces = []
@@ -163,14 +237,16 @@ def schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_un
 
         location_obj = case_study.locations[case_study.location_id_to_index[location_id]]
         scooter_id = row['provider_device_id']
-        scooter = get_or_create_scooter(case_study, manager, scooter_id, location_obj)
+        scooter = get_scooter_for_mode(case_study, manager, scooter_id, location_obj, fleet_init_mode)
+        if scooter is None:
+            continue
 
         event_time_absolute = int(row['event_time'].timestamp())
         event_time_rel = (event_time_absolute - reference_time_unix) + 20
         if event_time_rel < 0:
             event_time_rel = 0
 
-        case_study.simulator.add_event(MaintenanceDropoffEvent(event_time_rel, scooter, location_obj))
+        case_study.simulator.add_event(RebalanceDropoffEvent(event_time_rel, scooter, location_obj))
         traces.append({
             'rebalance_id': rebalance_id,
             'scooter_id': scooter_id,
@@ -183,7 +259,7 @@ def schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_un
     return traces
 
 
-def schedule_maintenance_dropoff_events(case_study, manager, df, reference_time_unix: int):
+def schedule_maintenance_dropoff_events(case_study, manager, df, reference_time_unix: int, fleet_init_mode: str):
     """Schedule maintenance drop-off events (event_type_id=10)."""
     maintenances = df[df['event_type_id'] == 10].sort_values('event_time')
     traces = []
@@ -196,14 +272,16 @@ def schedule_maintenance_dropoff_events(case_study, manager, df, reference_time_
 
         location_obj = case_study.locations[case_study.location_id_to_index[location_id]]
         scooter_id = row['provider_device_id']
-        scooter = get_or_create_scooter(case_study, manager, scooter_id, location_obj)
+        scooter = get_scooter_for_mode(case_study, manager, scooter_id, location_obj, fleet_init_mode)
+        if scooter is None:
+            continue
 
         event_time_absolute = int(row['event_time'].timestamp())
         event_time_rel = (event_time_absolute - reference_time_unix) + 20
         if event_time_rel < 0:
             event_time_rel = 0
 
-        case_study.simulator.add_event(RebalanceDropoffEvent(event_time_rel, scooter, location_obj))
+        case_study.simulator.add_event(MaintenanceDropoffEvent(event_time_rel, scooter, location_obj))
         traces.append({
             'maintenance_id': maintenance_id,
             'scooter_id': scooter_id,
@@ -216,7 +294,7 @@ def schedule_maintenance_dropoff_events(case_study, manager, df, reference_time_
     return traces
 
 
-def schedule_battery_events(case_study, manager, df, reference_time_unix: int):
+def schedule_battery_events(case_study, manager, df, reference_time_unix: int, fleet_init_mode: str):
     """Schedule battery events (event_type_id=8,9,11)."""
     battery_events_df = df[df['event_type_id'].isin([8, 9, 11])].sort_values('event_time')
     traces = []
@@ -232,10 +310,15 @@ def schedule_battery_events(case_study, manager, df, reference_time_unix: int):
         scooter_id = row['provider_device_id']
         event_type_id = row['event_type_id']
 
-        # Get or create the scooter
-        # Battery events don't have helpful location info initially, use a dummy location
-        dummy_location = case_study.locations[0] if len(case_study.locations) > 0 else None
-        scooter = get_or_create_scooter(case_study, manager, scooter_id, dummy_location)
+        location_obj = None
+        if int(row['location_id']) in case_study.location_id_to_index:
+            location_obj = case_study.locations[case_study.location_id_to_index[int(row['location_id'])]]
+        elif len(case_study.locations) > 0:
+            location_obj = case_study.locations[0]
+
+        scooter = get_scooter_for_mode(case_study, manager, scooter_id, location_obj, fleet_init_mode)
+        if scooter is None:
+            continue
 
         event_time_absolute = int(row['event_time'].timestamp())
         event_time_rel = (event_time_absolute - reference_time_unix) + 20
@@ -258,7 +341,7 @@ def schedule_battery_events(case_study, manager, df, reference_time_unix: int):
     return traces
 
 
-def build_trips_from_sql(case_study, manager, df, reference_time_unix: int):
+def build_trips_from_sql(case_study, manager, df, reference_time_unix: int, fleet_init_mode: str):
     """Create passenger request + pickup + dropoff events from all valid SQL pairs."""
     grouped = df.groupby('provider_device_id')
     traces = []
@@ -294,7 +377,10 @@ def build_trips_from_sql(case_study, manager, df, reference_time_unix: int):
             if request_time_rel < 0:
                 request_time_rel = 0
 
-            scooter = get_or_create_scooter(case_study, manager, scooter_id, pickup_location)
+            scooter = get_scooter_for_mode(case_study, manager, scooter_id, pickup_location, fleet_init_mode)
+            if scooter is None:
+                i += 2
+                continue
             scooter.location = pickup_location
 
             planned_distance, planned_tt = manager.get_distance_and_travel_time_between_passenger_origin_destination(
@@ -496,6 +582,12 @@ if __name__ == '__main__':
     location_file = sys.argv[1]
     distance_matrix_folder = sys.argv[2]
     output_dir = sys.argv[3]
+    fleet_init_mode = FLEET_INIT_MODE
+    print(f'[mmm.py runtime] file={__file__} fleet_init_mode={fleet_init_mode}')
+    if fleet_init_mode not in VALID_FLEET_INIT_MODES:
+        print(f'Invalid fleet_init_mode: {fleet_init_mode}')
+        print('Valid options in configuration: full | on_demand')
+        sys.exit(1)
     if not output_dir.endswith('/'):
         output_dir += '/'
 
@@ -514,6 +606,16 @@ if __name__ == '__main__':
         print('No OD-matrix locations available for SQL matching.')
         sys.exit(1)
 
+    if fleet_init_mode == FLEET_INIT_FULL:
+        # Full initialization: all scooters start at their last known pre-window position.
+        initial_fleet_df = load_initial_fleet_to_df()
+        print(f'Initial fleet SQL rows (all existing scooters): {len(initial_fleet_df)}')
+        initial_fleet_df = add_location_id_column(initial_fleet_df, od_location_points)
+        initialized_count = initialize_scooter_fleet(case_study, manager, initial_fleet_df)
+        print(f'Initial scooter fleet initialized (full): {initialized_count}')
+    else:
+        print('Fleet initialization mode: on_demand (scooters initialized per trip/event)')
+
     # Load SQL events and map each row to nearest simulation location
     df = load_events_to_df()
     df = add_location_id_column(df, od_location_points)
@@ -524,17 +626,17 @@ if __name__ == '__main__':
         sys.exit(1)
     reference_time_unix = int(df['event_time'].min().timestamp())
 
-    rebalance_traces = schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_unix)
+    rebalance_traces = schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_unix, fleet_init_mode)
     print(f'Scheduled rebalance dropoff events: {len(rebalance_traces)}')
 
-    maintenance_traces = schedule_maintenance_dropoff_events(case_study, manager, df, reference_time_unix)
+    maintenance_traces = schedule_maintenance_dropoff_events(case_study, manager, df, reference_time_unix, fleet_init_mode)
     print(f'Scheduled maintenance dropoff events: {len(maintenance_traces)}')
 
-    battery_traces = schedule_battery_events(case_study, manager, df, reference_time_unix)
+    battery_traces = schedule_battery_events(case_study, manager, df, reference_time_unix, fleet_init_mode)
     print(f'Scheduled battery events: {len(battery_traces)}')
 
     # Build trips from all valid SQL pickup->dropoff pairs
-    trip_traces = build_trips_from_sql(case_study, manager, df, reference_time_unix)
+    trip_traces = build_trips_from_sql(case_study, manager, df, reference_time_unix, fleet_init_mode)
     if len(trip_traces) == 0:
         print('No valid pickup/dropoff pair found in SQL data.')
         sys.exit(1)
