@@ -153,7 +153,8 @@ def add_or_move_scooter_from_sql_row(case_study, manager, row):
 def schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_unix: int):
     """Schedule rebalance drop-off events (event_type_id=7)."""
     rebalances = df[df['event_type_id'] == 7].sort_values('event_time')
-    count = 0
+    traces = []
+    rebalance_id = 1
 
     for _, row in rebalances.iterrows():
         location_id = int(row['location_id'])
@@ -170,9 +171,16 @@ def schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_un
             event_time_rel = 0
 
         case_study.simulator.add_event(RebalanceDropoffEvent(event_time_rel, scooter, location_obj))
-        count += 1
+        traces.append({
+            'rebalance_id': rebalance_id,
+            'scooter_id': scooter_id,
+            'location_id': location_id,
+            'event_time_rel': event_time_rel,
+            'event_time_sql_unix': event_time_absolute,
+        })
+        rebalance_id += 1
 
-    return count
+    return traces
 
 
 def build_trips_from_sql(case_study, manager, df, reference_time_unix: int):
@@ -252,7 +260,7 @@ def build_trips_from_sql(case_study, manager, df, reference_time_unix: int):
     return traces
 
 
-def export_trip_lifecycle(output_dir: str, traces: list, case_study):
+def export_trip_lifecycle(output_dir: str, traces: list, rebalance_traces: list, case_study):
     """Export documented lifecycle steps for all simulated SQL trips."""
     os.makedirs(output_dir, exist_ok=True)
     filepath = os.path.join(output_dir, 'trip_lifecycle_steps.csv')
@@ -273,6 +281,7 @@ def export_trip_lifecycle(output_dir: str, traces: list, case_study):
 
         rows.extend([
             {
+                'event_family': 'passenger_trip',
                 'step': 'passenger_request',
                 'passenger_id': trace['passenger_id'],
                 'scooter_id': trace['scooter_id'],
@@ -283,6 +292,7 @@ def export_trip_lifecycle(output_dir: str, traces: list, case_study):
                 'planned_travel_time': trace['planned_travel_time']
             },
             {
+                'event_family': 'passenger_trip',
                 'step': 'pickup',
                 'passenger_id': trace['passenger_id'],
                 'scooter_id': trace['scooter_id'],
@@ -293,6 +303,7 @@ def export_trip_lifecycle(output_dir: str, traces: list, case_study):
                 'planned_travel_time': trace['planned_travel_time']
             },
             {
+                'event_family': 'passenger_trip',
                 'step': 'dropoff',
                 'passenger_id': trace['passenger_id'],
                 'scooter_id': trace['scooter_id'],
@@ -303,6 +314,7 @@ def export_trip_lifecycle(output_dir: str, traces: list, case_study):
                 'planned_travel_time': trace['planned_travel_time']
             },
             {
+                'event_family': 'passenger_trip',
                 'step': 'trip',
                 'passenger_id': trace['passenger_id'],
                 'scooter_id': trace['scooter_id'],
@@ -314,10 +326,25 @@ def export_trip_lifecycle(output_dir: str, traces: list, case_study):
             }
         ])
 
+    for rebalance_trace in rebalance_traces:
+        rows.append({
+            'event_family': 'rebalance',
+            'step': 'rebalance_dropoff',
+            'passenger_id': '',
+            'scooter_id': rebalance_trace['scooter_id'],
+            'location_id': rebalance_trace['location_id'],
+            'time_rel': rebalance_trace['event_time_rel'],
+            'time_sql_unix': rebalance_trace['event_time_sql_unix'],
+            'planned_distance': '',
+            'planned_travel_time': ''
+        })
+
+    rows.sort(key=lambda r: (r['time_rel'] if r['time_rel'] is not None else 10**18, str(r['step'])))
+
     with open(filepath, 'w', newline='') as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=['step', 'passenger_id', 'scooter_id', 'location_id', 'time_rel', 'time_sql_unix', 'planned_distance', 'planned_travel_time']
+            fieldnames=['event_family', 'step', 'passenger_id', 'scooter_id', 'location_id', 'time_rel', 'time_sql_unix', 'planned_distance', 'planned_travel_time']
         )
         writer.writeheader()
         writer.writerows(rows)
@@ -398,8 +425,8 @@ if __name__ == '__main__':
         sys.exit(1)
     reference_time_unix = int(df['event_time'].min().timestamp())
 
-    rebalance_count = schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_unix)
-    print(f'Scheduled rebalance dropoff events: {rebalance_count}')
+    rebalance_traces = schedule_rebalance_dropoff_events(case_study, manager, df, reference_time_unix)
+    print(f'Scheduled rebalance dropoff events: {len(rebalance_traces)}')
 
     # Build trips from all valid SQL pickup->dropoff pairs
     trip_traces = build_trips_from_sql(case_study, manager, df, reference_time_unix)
@@ -414,6 +441,6 @@ if __name__ == '__main__':
     case_study.start_simulation()
     export_individual_outputs_for_micromobility(output_dir, case_study)
     case_study.make_statistic(output_dir, None, False)
-    export_trip_lifecycle(output_dir, trip_traces, case_study)
+    export_trip_lifecycle(output_dir, trip_traces, rebalance_traces, case_study)
     print('End of Simulation')
     sys.exit(0)
