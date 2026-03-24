@@ -443,8 +443,8 @@ class CaseStudy(object):
             file_o.write('number of served passengers;'+str(total_served)+'\n')
             file_o.write('occuped total distance;'+str(total_occupied_distance)+'\n')
             file_o.write('empty total distance;'+str(total_empty_distance)+'\n')
-            file_o.write('occuped total travel time;'+str(total_occupied_distance)+'\n')
-            file_o.write('empty total travel time;'+str(total_empty_distance)+'\n')
+            file_o.write('occuped total travel time;'+str(total_occupied_travel_time)+'\n')
+            file_o.write('empty total travel time;'+str(total_empty_travel_time)+'\n')
             file_o.write('number of occupied trips;'+str(total_occupied_trips)+'\n')
             file_o.write('number of empty trips;'+str(total_empty_trips)+'\n')
 
