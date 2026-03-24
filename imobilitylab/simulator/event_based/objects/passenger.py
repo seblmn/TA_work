@@ -138,7 +138,7 @@ class Passenger(object):
         waiting_time = 0
         if len(self.borded_times) > 0:
             #print('  borded > 0')
-            for i in range(0, len(self.arrival_times)-1):
+            for i in range(0, len(self.arrival_times)):
                 if len(self.borded_times) >= i+1:
                     #print('         ', self.borded_times[i] - self.arrival_times[i])
                     waiting_time += self.borded_times[i] - self.arrival_times[i]
